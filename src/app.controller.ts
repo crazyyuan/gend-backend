@@ -1,4 +1,4 @@
-import { Controller, Param, Post, Body } from '@nestjs/common';
+import { Controller, Param, Post, Body, Get } from '@nestjs/common';
 import { AppService } from './app.service';
 import { DefaultGenerics, StreamChat } from 'stream-chat';
 import { IsNotEmpty, IsString } from 'class-validator';
@@ -19,6 +19,11 @@ export class AppController {
       process.env.STREAMCHAT_KEY,
       process.env.STREAMCHAT_SECRET,
     );
+  }
+
+  @Get('/hello')
+  hello() {
+    return { key: 'hello' };
   }
 
   @Post('/signup')
