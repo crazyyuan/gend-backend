@@ -3,6 +3,7 @@ import { AppService } from './app.service';
 import { DefaultGenerics, StreamChat } from 'stream-chat';
 import { IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { v4 as uuidv4 } from 'uuid';
 
 export class SignupBody {
   @IsNotEmpty()
@@ -14,6 +15,7 @@ export class SignupBody {
 @Controller()
 export class AppController {
   private serverClient: StreamChat<DefaultGenerics>;
+
   constructor(private readonly appService: AppService) {
     this.serverClient = StreamChat.getInstance(
       process.env.STREAMCHAT_KEY,
@@ -26,17 +28,40 @@ export class AppController {
     return { key: 'hello' };
   }
 
-  @Post('/signup')
-  async signup(@Body() body: SignupBody) {
+  @Post('/clean')
+  async cleanData() {
+    const channels = await this.serverClient.queryChannels(
+      { type: 'messaging' },
+      [],
+      {},
+    );
+    if (channels.length > 0) {
+      await this.serverClient.deleteChannels(
+        channels.map((channel) => channel.cid),
+      );
+    }
+    return {
+      success: true,
+    };
+  }
+
+  @Post('/login')
+  async login(@Body() body: SignupBody) {
+    const result = await this.serverClient.queryUsers({
+      id: { $in: [body.wallet] },
+    });
+
+    console.log('result.users', result.users);
+    if (result.users.length == 0) {
+      await this.serverClient.upsertUsers([
+        {
+          id: body.wallet,
+          role: 'user',
+        },
+      ]);
+    }
+
     const token = this.serverClient.createToken(body.wallet);
-
-    const response = await this.serverClient.upsertUsers([
-      {
-        id: body.wallet,
-        role: 'user',
-      },
-    ]);
-
     return {
       userId: body.wallet,
       token: token,
@@ -45,16 +70,60 @@ export class AppController {
 
   @Post('/match/:id')
   async match(@Param('id') id: string) {
-    const channel = this.serverClient.channel('match', '', {
-      created_by_id: '4645',
+    // in logic
+    const inChannels = await this.serverClient.queryChannels(
+      { type: 'messaging', members: { $in: [id] } },
+      [],
+      {},
+    );
+    for (let i = 0; i < inChannels.length; i++) {
+      const channel = inChannels[i];
+      if (channel.data.member_count == 1) {
+        console.log('in channel');
+        return {
+          channelId: channel.id,
+          memberCount: 1,
+        };
+      }
+    }
+
+    // not in logic
+    const ninChannels = await this.serverClient.queryChannels(
+      { type: 'messaging', members: { $nin: [id] } },
+      [],
+      {},
+    );
+
+    if (ninChannels.length > 0) {
+      for (let i = 0; i < ninChannels.length; i++) {
+        const channel = ninChannels[i];
+        const count = channel.data.member_count ?? 0;
+        // @ts-ignore
+        if (count >= 2) {
+          continue;
+        }
+        // maybe matched before, need fix
+        console.log('join channel');
+        await channel.addMembers([id]);
+        return {
+          channelId: channel.id,
+          memberCount: 2,
+        };
+      }
+    }
+
+    console.log('create and join channel');
+    const channelId = uuidv4();
+    const channel = this.serverClient.channel('messaging', channelId, {
+      members: [id],
     });
-    await channel.create();
-    // create the channel and set created_by to user id 4645
-    const update = await channel.update({
-      name: 'myspecialchannel',
-      image: 'imageurl',
-      mycustomfield: '123',
-    });
+    // @ts-ignore
+    await channel.create({ data: { created_by_id: channelId } });
+    await channel.addMembers([id]);
+    return {
+      channelId: channel.id,
+      memberCount: 1,
+    };
   }
 
   @Post('/chat')
