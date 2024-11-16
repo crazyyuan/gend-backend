@@ -4,6 +4,7 @@ import { DefaultGenerics, StreamChat } from 'stream-chat';
 import { IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { v4 as uuidv4 } from 'uuid';
+import { ConfigService } from '@nestjs/config';
 
 export class SignupBody {
   @IsNotEmpty()
@@ -16,11 +17,14 @@ export class SignupBody {
 export class AppController {
   private serverClient: StreamChat<DefaultGenerics>;
 
-  constructor(private readonly appService: AppService) {
-    console.log('AppController', process.env.STREAMCHAT_KEY);
+  constructor(
+    private readonly appService: AppService,
+    private readonly configService: ConfigService,
+  ) {
+    console.log('AppController', this.configService.get('STREAMCHAT_KEY'));
     this.serverClient = StreamChat.getInstance(
-      process.env.STREAMCHAT_KEY,
-      process.env.STREAMCHAT_SECRET,
+      this.configService.get('STREAMCHAT_KEY'),
+      this.configService.get('STREAMCHAT_SECRET'),
     );
   }
 
