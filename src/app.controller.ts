@@ -17,6 +17,7 @@ export class AppController {
   private serverClient: StreamChat<DefaultGenerics>;
 
   constructor(private readonly appService: AppService) {
+    console.log('AppController', process.env.STREAMCHAT_KEY);
     this.serverClient = StreamChat.getInstance(
       process.env.STREAMCHAT_KEY,
       process.env.STREAMCHAT_SECRET,
